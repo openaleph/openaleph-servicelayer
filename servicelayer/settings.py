@@ -27,6 +27,8 @@ ARCHIVE_ENDPOINT_URL = env.get("ARCHIVE_ENDPOINT_URL")
 # Storage type (either 's3', 'gs', or 'file', i.e. local file system):
 ARCHIVE_TYPE = env.get("ARCHIVE_TYPE", "file")
 ARCHIVE_BUCKET = env.get("ARCHIVE_BUCKET")
+ARCHIVE_BUCKET_PATH = env.get("ARCHIVE_BUCKET_PATH")
+ARCHIVE_PATH_PREFIXED = env.to_bool("ARCHIVE_PATH_PREFIXED", default=True)
 ARCHIVE_PATH = env.get("ARCHIVE_PATH")
 PUBLICATION_BUCKET = env.get("PUBLICATION_BUCKET", ARCHIVE_BUCKET)
 

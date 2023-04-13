@@ -1,12 +1,17 @@
-import boto3
 import logging
 from datetime import datetime
-from botocore.exceptions import ClientError
+from pathlib import Path
 
+import boto3
+from botocore.exceptions import ClientError
 from servicelayer import settings
+from servicelayer.archive.util import (
+    checksum,
+    ensure_path,
+    path_content_hash,
+    path_prefix,
+)
 from servicelayer.archive.virtual import VirtualArchive
-from servicelayer.archive.util import checksum, ensure_path
-from servicelayer.archive.util import path_prefix, path_content_hash
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +19,9 @@ log = logging.getLogger(__name__)
 class S3Archive(VirtualArchive):
     TIMEOUT = 84600
 
-    def __init__(self, bucket=None, publication_bucket=None):
+    def __init__(
+        self, bucket=None, publication_bucket=None, path=None, path_prefixed=True
+    ):
         super(S3Archive, self).__init__(bucket)
         key_id = settings.AWS_KEY_ID
         secret_key = settings.AWS_SECRET_KEY
@@ -28,6 +35,8 @@ class S3Archive(VirtualArchive):
         # config=Config(signature_version='s3v4'))
         self.bucket = bucket
         self.publication_bucket = publication_bucket
+        self.path = Path(path or "")
+        self.path_prefixed = path_prefixed
         log.info("Archive: s3://%s", bucket)
 
         try:
@@ -73,10 +82,12 @@ class S3Archive(VirtualArchive):
         if prefix is None:
             if content_hash is None:
                 return
-            prefix = path_prefix(content_hash)
+            prefix = path_prefix(content_hash, prefixed=self.path_prefixed)
             if prefix is None:
                 return
-        res = self.client.list_objects(MaxKeys=1, Bucket=self.bucket, Prefix=prefix)
+        res = self.client.list_objects(
+            MaxKeys=1, Bucket=self.bucket, Prefix=str(self.path / prefix)
+        )
         for obj in res.get("Contents", []):
             return obj.get("Key")
 
@@ -94,7 +105,9 @@ class S3Archive(VirtualArchive):
         if obj is not None:
             return content_hash
 
-        path = "{}/data".format(path_prefix(content_hash))
+        path = "{}/data".format(
+            str(self.path / path_prefix(content_hash, prefixed=self.path_prefixed))
+        )
         extra = {}
         if mime_type is not None:
             extra["ContentType"] = mime_type
@@ -114,19 +127,21 @@ class S3Archive(VirtualArchive):
     def delete_file(self, content_hash):
         if content_hash is None:
             return
-        prefix = path_prefix(content_hash)
+        prefix = path_prefix(content_hash, prefixed=self.path_prefixed)
         if prefix is None:
             return
-        res = self.client.list_objects(Bucket=self.bucket, Prefix=prefix)
+        res = self.client.list_objects(
+            Bucket=self.bucket, Prefix=str(self.path / prefix)
+        )
         for obj in res.get("Contents", []):
             self.client.delete_object(Bucket=self.bucket, Key=obj.get("Key"))
 
     def list_files(self, prefix=None):
         """Try to list out all the hashes in the archive."""
         kwargs = {"Bucket": self.bucket}
-        prefix = path_prefix(prefix)
+        prefix = path_prefix(prefix, prefixed=self.path_prefixed)
         if prefix is not None:
-            kwargs["Prefix"] = prefix
+            kwargs["Prefix"] = str(self.path / prefix)
         token = None
         while True:
             if token is not None:

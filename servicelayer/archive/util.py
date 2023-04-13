@@ -2,6 +2,8 @@ import os
 from hashlib import sha1
 from pathlib import Path
 
+from servicelayer.settings import ARCHIVE_PATH_PREFIXED
+
 BUF_SIZE = 1024 * 1024 * 16
 HASH_LENGTH = 40  # sha1
 
@@ -32,10 +34,12 @@ def checksum(file_name):
         return str(digest.hexdigest())
 
 
-def path_prefix(content_hash):
+def path_prefix(content_hash, prefixed=ARCHIVE_PATH_PREFIXED):
     """Get a prefix for a content hashed folder structure."""
     if content_hash is None:
         return None
+    if not prefixed:
+        return content_hash
     prefix = os.path.join(content_hash[:2], content_hash[2:4], content_hash[4:6])
     if len(content_hash) >= 6:
         prefix = os.path.join(prefix, content_hash)

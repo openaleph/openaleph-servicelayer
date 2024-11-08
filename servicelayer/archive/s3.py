@@ -161,7 +161,7 @@ class S3Archive(VirtualArchive):
         if mime_type is not None:
             params["ResponseContentType"] = mime_type
         if file_name is not None:
-            disposition = "inline; filename=%s" % file_name
+            disposition = "attachment; filename=%s" % file_name
             params["ResponseContentDisposition"] = disposition
         expires_in = self.TIMEOUT
         if expire is not None:

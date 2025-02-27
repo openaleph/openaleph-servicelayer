@@ -12,7 +12,6 @@ jobs:
     - name: Build/pull Docker images
       run: |
         docker compose build shell
-        docker compose pull rabbitmq
     - name: Run the code format check
       run: docker compose run --rm shell make format-check
     - name: Run the linter

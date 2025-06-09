@@ -40,8 +40,8 @@ class FileArchive(Archive):
         if self._locate_key(content_hash):
             return content_hash
 
-        archive_prefix = path_prefix(content_hash)
-        archive_path = self.path.joinpath(archive_prefix)
+        # archive_prefix = path_prefix(content_hash)
+        archive_path = self.path.joinpath(content_hash)
         archive_path.mkdir(parents=True, exist_ok=True)
         file_name = safe_filename(file_path, default="data")
         archive_path = archive_path.joinpath(file_name)

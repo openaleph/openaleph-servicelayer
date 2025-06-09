@@ -19,10 +19,10 @@ class FileArchive(Archive):
         log.info("Archive: %s", self.path)
 
     def _locate_key(self, content_hash):
-        prefix = path_prefix(content_hash)
-        if prefix is None:
-            return
-        path = self.path.joinpath(prefix)
+        # prefix = path_prefix(content_hash)
+        # if prefix is None:
+        #     return
+        path = self.path.joinpath(content_hash)
         try:
             for file_name in path.iterdir():
                 return file_name.resolve()

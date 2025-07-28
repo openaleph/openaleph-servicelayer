@@ -10,7 +10,6 @@ install:
 	pip install -q --config-settings editable_mode=compat --use-pep517 -e .
 
 dev:
-	python3 -m pip install --upgrade pip setuptools
 	python3 -m pip install -q -r requirements.txt
 	python3 -m pip install -q -r requirements-dev.txt
 

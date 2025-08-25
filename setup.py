@@ -6,7 +6,7 @@ with open("README.md") as f:
 
 setup(
     name="openaleph-servicelayer",
-    version="1.23.2",
+    version="1.23.3",
     description="Basic remote service functions for openaleph components",
     classifiers=[
         "Development Status :: 3 - Alpha",

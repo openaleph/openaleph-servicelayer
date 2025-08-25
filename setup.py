@@ -5,9 +5,9 @@ with open("README.md") as f:
 
 
 setup(
-    name="servicelayer",
+    name="openaleph-servicelayer",
     version="1.23.1",
-    description="Basic remote service functions for alephdata components",
+    description="Basic remote service functions for openaleph components",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -17,8 +17,8 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     keywords="storage files s3",
-    author="Organized Crime and Corruption Reporting Project",
-    author_email="data@occrp.org",
+    author="Data and Research Center, forked from Organized Crime and Corruption Reporting Project",
+    author_email="alex@dataresearchcenter.org",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="http://github.com/alephdata/servicelayer",

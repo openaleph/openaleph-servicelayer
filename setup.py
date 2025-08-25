@@ -17,7 +17,7 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
     keywords="storage files s3",
-    author="Data and Research Center, forked from Organized Crime and Corruption Reporting Project",
+    author="Data and Research Center, forked from OCCRP.org",
     author_email="alex@dataresearchcenter.org",
     long_description=long_description,
     long_description_content_type="text/markdown",

@@ -19,10 +19,10 @@ class S3Archive(VirtualArchive):
         super(S3Archive, self).__init__(bucket)
         client_kwargs = clean_dict(
             {
-                "endpoint_url": settings.ARCHIVE_ENDPOINT_URL,
-                "region_name": settings.AWS_REGION,
-                "aws_access_key_id": settings.AWS_KEY_ID,
-                "aws_secret_access_key": settings.AWS_SECRET_KEY,
+                "endpoint_url": settings.ARCHIVE_ENDPOINT_URL or None,
+                "region_name": settings.AWS_REGION or None,
+                "aws_access_key_id": settings.AWS_KEY_ID or None,
+                "aws_secret_access_key": settings.AWS_SECRET_KEY or None,
             }
         )
         self.client = boto3.client("s3", **client_kwargs)

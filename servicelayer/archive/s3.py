@@ -2,6 +2,7 @@ import boto3
 import logging
 from datetime import datetime
 from botocore.exceptions import ClientError
+from banal import clean_dict
 
 from servicelayer import settings
 from servicelayer.archive.virtual import VirtualArchive
@@ -16,15 +17,15 @@ class S3Archive(VirtualArchive):
 
     def __init__(self, bucket=None, publication_bucket=None):
         super(S3Archive, self).__init__(bucket)
-        key_id = settings.AWS_KEY_ID
-        secret_key = settings.AWS_SECRET_KEY
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=settings.ARCHIVE_ENDPOINT_URL,
-            region_name=settings.AWS_REGION,
-            aws_access_key_id=key_id,
-            aws_secret_access_key=secret_key,
+        client_kwargs = clean_dict(
+            {
+                "endpoint_url": settings.ARCHIVE_ENDPOINT_URL,
+                "region_name": settings.AWS_REGION,
+                "aws_access_key_id": settings.AWS_KEY_ID,
+                "aws_secret_access_key": settings.AWS_SECRET_KEY,
+            }
         )
+        self.client = boto3.client("s3", **client_kwargs)
         # config=Config(signature_version='s3v4'))
         self.bucket = bucket
         self.publication_bucket = publication_bucket

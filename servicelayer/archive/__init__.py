@@ -12,7 +12,7 @@ def init_archive(
     path=settings.ARCHIVE_PATH,
     bucket=settings.ARCHIVE_BUCKET,
     publication_bucket=settings.PUBLICATION_BUCKET,
-    uri=settings.ARCHIVE_URI
+    uri=settings.ARCHIVE_URI,
 ):
     """Instantiate an archive object."""
     if archive_type == ARCHIVE_S3:

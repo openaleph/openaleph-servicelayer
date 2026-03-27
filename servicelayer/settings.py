@@ -24,10 +24,13 @@ AWS_REGION = env.get("AWS_REGION", "eu-west-1")
 # S3 compatible Minio host if using Minio for storage
 ARCHIVE_ENDPOINT_URL = env.get("ARCHIVE_ENDPOINT_URL")
 
-# Storage type (either 's3', 'gs', or 'file', i.e. local file system):
+# Storage type (either 's3', 'gs', 'anystore', or 'file'
 ARCHIVE_TYPE = env.get("ARCHIVE_TYPE", "file")
 ARCHIVE_BUCKET = env.get("ARCHIVE_BUCKET")
 ARCHIVE_PATH = env.get("ARCHIVE_PATH")
+ARCHIVE_URI = env.get("ARCHIVE_URI")
+ARCHIVE_API_KEY = env.get("ARCHIVE_API_KEY")
+ARCHIVE_SECRET_KEY = env.get("ALEPH_SECRET_KEY", "scrt")
 PUBLICATION_BUCKET = env.get("PUBLICATION_BUCKET", ARCHIVE_BUCKET)
 
 # Logging

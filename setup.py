@@ -42,6 +42,10 @@ setup(
             "grpcio >= 1.32.0, <2.0.0",
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
+        "anystore": [
+            "anystore[api] >= 1.1.4, < 2.0.0",
+            "PyJWT >= 2.0.0, < 3.0.0",
+        ],
         "dev": [
             "twine",
             "moto < 5",

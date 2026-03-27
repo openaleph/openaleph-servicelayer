@@ -1,13 +1,14 @@
 FROM python:3.13-slim
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y --no-install-recommends \
-    build-essential \
+    build-essential libicu-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /opt/servicelayer
 WORKDIR /opt/servicelayer
 
 RUN pip install --no-cache-dir --upgrade pip setuptools \
+    && pip install --no-cache-dir --no-binary=:pyicu: pyicu \
     && pip install --no-cache-dir -e ".[anystore]" \
     && pip install --no-cache-dir granian
 

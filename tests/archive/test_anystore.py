@@ -95,12 +95,15 @@ class AnystoreApiTest(AnystoreArchiveTestMixin, TestCase):
         host, port = self.server.servers[0].sockets[0].getsockname()
         uri = f"anystore+http://{host}:{port}"
         self._original_api_key = settings.ARCHIVE_API_KEY
+        self._original_api_secret = settings.ARCHIVE_API_SECRET
         settings.ARCHIVE_API_KEY = "test-key"
+        settings.ARCHIVE_API_SECRET = "test-secret"
         self.archive = init_archive("anystore", uri=uri)
         self.file = ensure_path(__file__)
 
     def tearDown(self):
         settings.ARCHIVE_API_KEY = self._original_api_key
+        settings.ARCHIVE_API_SECRET = self._original_api_secret
         self.server.should_exit = True
         self.thread.join(timeout=5)
         if self.path.exists():

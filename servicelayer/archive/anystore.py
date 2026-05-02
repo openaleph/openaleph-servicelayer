@@ -1,5 +1,6 @@
+from datetime import datetime
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 from anystore import get_store
 from anystore.logic.io import stream
@@ -16,13 +17,30 @@ from servicelayer.archive.util import (
 )
 
 
-def get_http_headers():
-    if settings.ARCHIVE_API_KEY is None:
-        raise RuntimeError("Configure `ARCHIVE_API_KEY` for http archive!")
+def http_backend_config():
+    if not settings.ARCHIVE_API_KEY or not settings.ARCHIVE_API_SECRET:
+        raise RuntimeError(
+            "Configure `ARCHIVE_API_KEY` / `ARCHIVE_API_SECRET` for archive!"
+        )
     return {
-        "User-Agent": "servicelayer/anystore",
+        "User-Agent": "aleph-servicelayer/anystore",
         "X-Api-Key": settings.ARCHIVE_API_KEY,
+        "X-Api-Secret": settings.ARCHIVE_API_SECRET,
     }
+
+
+# Backend-specific kwarg names for response-header overrides on
+# `fsspec.AbstractFileSystem.sign`. Per protocol: (mime_type kwarg,
+# content-disposition kwarg).
+_SIGN_RESPONSE_KWARGS: dict[str, tuple[str, str]] = {
+    "s3": ("ResponseContentType", "ResponseContentDisposition"),
+    "s3a": ("ResponseContentType", "ResponseContentDisposition"),
+    "gs": ("response_type", "response_disposition"),
+    "gcs": ("response_type", "response_disposition"),
+    "abfs": ("content_type", "content_disposition"),
+    "abfss": ("content_type", "content_disposition"),
+    "az": ("content_type", "content_disposition"),
+}
 
 
 def ensure_uri(uri: Uri) -> str:
@@ -37,6 +55,8 @@ class AnystoreArchive(VirtualArchive):
     handled via `fsspec` (for some need extra installation) as well as http
     api. Set via `ARCHIVE_URI` and `ARCHIVE_TYPE=anystore`"""
 
+    TIMEOUT = 84600
+
     def __init__(self, base_name: str, uri: Uri | None = None):
         uri = uri or settings.ARCHIVE_URI
         if not uri:
@@ -44,10 +64,12 @@ class AnystoreArchive(VirtualArchive):
         super().__init__(base_name)
         uri = ensure_uri(uri)
         if uri.startswith("anystore"):
-            self.store = get_store(uri, client_kwargs={"headers": get_http_headers()})
+            self.store = get_store(
+                uri,
+                backend_config={"client_kwargs": {"headers": http_backend_config()}},
+            )
         else:
             self.store = get_store(uri)
-        self.endpoint_url = settings.ARCHIVE_ENDPOINT_URL
 
     def archive_file(
         self,
@@ -99,24 +121,49 @@ class AnystoreArchive(VirtualArchive):
     def generate_url(
         self,
         content_hash: str,
-        file_name: str | None,
+        file_name: str | None = None,
         mime_type: str | None = None,
-        expire: str | None = None,
+        expire: datetime | None = None,
     ) -> str | None:
+        """Generate a signed URL via the underlying fsspec backend (s3, gcs,
+        azure, ...). Returns ``None`` if the backend does not implement
+        signing (e.g. local file, memory, http) or if the file is missing.
         """
-        Callers need to add auth if needed for read access
-        """
-        if not self.endpoint_url:
-            return
         key = self._locate_key(content_hash)
         if key is None:
-            return
-        url = f"{self.endpoint_url}/{key}"
-        if file_name:
-            url += f"&filename={file_name}"
-        if mime_type:
-            url += f"&mimetype={mime_type}"
-        return url
+            return None
+        expires_in = self.TIMEOUT
+        if expire is not None:
+            delta = expire - datetime.utcnow()
+            expires_in = int(delta.total_seconds())
+        fs_key = self.store._keys.to_fs_key(key)
+        sign_kwargs = self._sign_kwargs(file_name, mime_type)
+        try:
+            return self.store._fs.sign(fs_key, expiration=expires_in, **sign_kwargs)
+        except NotImplementedError:
+            return None
+
+    def _sign_kwargs(
+        self, file_name: str | None, mime_type: str | None
+    ) -> dict[str, Any]:
+        """Map response-header overrides to backend-specific kwargs accepted
+        by ``fsspec.AbstractFileSystem.sign``. Backends without an entry just
+        get ``expiration`` — overrides are silently dropped."""
+        protocols = self.store._fs.protocol
+        if isinstance(protocols, str):
+            protocols = (protocols,)
+        kwargs: dict[str, Any] = {}
+        for protocol in protocols:
+            mapping = _SIGN_RESPONSE_KWARGS.get(protocol)
+            if mapping is None:
+                continue
+            mime_kw, disp_kw = mapping
+            if mime_type:
+                kwargs[mime_kw] = mime_type
+            if file_name:
+                kwargs[disp_kw] = f"attachment; filename={file_name}"
+            break
+        return kwargs
 
     def _locate_key(
         self, content_hash: str | None = None, prefix: str | None = None

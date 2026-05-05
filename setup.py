@@ -43,7 +43,7 @@ setup(
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
         "anystore": [
-            "anystore >= 1.1.7, < 2.0.0",
+            "anystore >= 1.1.8, < 2.0.0",
         ],
         "dev": [
             "twine",

@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import quote
 
 from anystore import get_store
 from anystore.logic.io import stream
@@ -40,6 +41,8 @@ _SIGN_RESPONSE_KWARGS: dict[str, tuple[str, str]] = {
     "abfs": ("content_type", "content_disposition"),
     "abfss": ("content_type", "content_disposition"),
     "az": ("content_type", "content_disposition"),
+    "anystore+http": ("content_type", "content_disposition"),
+    "anystore+https": ("content_type", "content_disposition"),
 }
 
 
@@ -161,7 +164,16 @@ class AnystoreArchive(VirtualArchive):
             if mime_type:
                 kwargs[mime_kw] = mime_type
             if file_name:
-                kwargs[disp_kw] = f"attachment; filename={file_name}"
+                kwargs[disp_kw] = f"attachment;filename={file_name}"
+            if "anystore" in protocol:
+                # add key/secret to kwargs and method
+                kwargs["key"] = settings.ARCHIVE_API_PRESIGN_KEY
+                kwargs["secret"] = settings.ARCHIVE_API_PRESIGN_SECRET
+                # sign method, content disposition and mime
+                dispo, mime = kwargs.get(disp_kw, ""), kwargs.get(mime_kw, "")
+                kwargs["payload"] = f"GET{mime}" + quote(dispo, safe=";=")
+                if settings.ARCHIVE_API_PRESIGN_URL:
+                    kwargs["base_url"] = settings.ARCHIVE_API_PRESIGN_URL
             break
         return kwargs
 

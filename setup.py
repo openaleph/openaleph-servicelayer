@@ -53,6 +53,7 @@ setup(
             "coverage",
             "pytest-cov",
             "time-machine>=2.14.1, <3.0.0",
+            "uvicorn",
         ],
     },
     test_suite="tests",

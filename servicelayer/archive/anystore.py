@@ -169,9 +169,14 @@ class AnystoreArchive(VirtualArchive):
                 # add key/secret to kwargs and method
                 kwargs["key"] = settings.ARCHIVE_API_PRESIGN_KEY
                 kwargs["secret"] = settings.ARCHIVE_API_PRESIGN_SECRET
-                # sign method, content disposition and mime
+                # sign method, content disposition and mime — must mirror the
+                # URL-encoding applied in `ApiFileSystem.sign` so the hash
+                # matches `$arg_content_*` on the nginx side (which splits
+                # query args on `&` AND `;`).
                 dispo, mime = kwargs.get(disp_kw, ""), kwargs.get(mime_kw, "")
-                kwargs["payload"] = f"GET{mime}" + quote(dispo, safe=";=")
+                kwargs["payload"] = (
+                    f"GET{quote(mime, safe='/=')}{quote(dispo, safe='/=')}"
+                )
                 if settings.ARCHIVE_API_PRESIGN_URL:
                     kwargs["base_url"] = settings.ARCHIVE_API_PRESIGN_URL
             break

@@ -43,7 +43,7 @@ setup(
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
         "anystore": [
-            "anystore >= 1.1.8, < 2.0.0",
+            "anystore @ git+https://github.com/dataresearchcenter/anystore.git",
         ],
         "dev": [
             "twine",

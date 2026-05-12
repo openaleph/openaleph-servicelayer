@@ -7,7 +7,7 @@ build-docker:
 	docker compose build --no-rm --parallel
 
 install:
-	pip install -q --config-settings editable_mode=compat --use-pep517 -e .
+	pip install -q --config-settings editable_mode=compat --use-pep517 -e ".[anystore]"
 
 dev:
 	python3 -m pip install -q -r requirements.txt

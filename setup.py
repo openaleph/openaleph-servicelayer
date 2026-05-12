@@ -42,6 +42,7 @@ setup(
             "grpcio >= 1.32.0, <2.0.0",
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
+        "anystore": ["anystore >= 0.1.9"],
         "dev": [
             "twine",
             "moto < 5",
@@ -50,6 +51,8 @@ setup(
             "coverage",
             "pytest-cov",
             "time-machine>=2.14.1, <3.0.0",
+            "uvicorn",
+            "fastapi",
         ],
     },
     test_suite="tests",

@@ -10,15 +10,14 @@ jobs:
       - name: Show ref
         run: echo "$GITHUB_REF"
       - name: Build/pull Docker images
-        run: |
-          docker compose build shell
+        run: docker compose build shell
       - name: Run the code format check
         run: docker compose run --rm shell make format-check
       - name: Run the linter
         run: docker compose run --rm shell make lint
       - name: Run the tests
         # Some tests rely on the package being installed
-        run: docker compose run --rm shell bash -c "make install && make test-local"
+        run: docker compose run --rm shell bash -c "make install && make dev && make test-local"
       - name: Build a distribution
         run: docker compose run --rm shell python3 setup.py sdist bdist_wheel
       - name: Publish a Python distribution to PyPI

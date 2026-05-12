@@ -96,15 +96,65 @@ class AnystoreApiTest(AnystoreArchiveTestMixin, TestCase):
         uri = f"anystore+http://{host}:{port}"
         self._original_api_key = settings.ARCHIVE_API_KEY
         self._original_api_secret = settings.ARCHIVE_API_SECRET
+        self._original_presign_key = settings.ARCHIVE_API_PRESIGN_KEY
+        self._original_presign_secret = settings.ARCHIVE_API_PRESIGN_SECRET
         settings.ARCHIVE_API_KEY = "test-key"
         settings.ARCHIVE_API_SECRET = "test-secret"
+        settings.ARCHIVE_API_PRESIGN_KEY = "test-presign-key"
+        settings.ARCHIVE_API_PRESIGN_SECRET = "test-presign-secret"
         self.archive = init_archive("anystore", uri=uri)
         self.file = ensure_path(__file__)
 
     def tearDown(self):
         settings.ARCHIVE_API_KEY = self._original_api_key
         settings.ARCHIVE_API_SECRET = self._original_api_secret
+        settings.ARCHIVE_API_PRESIGN_KEY = self._original_presign_key
+        settings.ARCHIVE_API_PRESIGN_SECRET = self._original_presign_secret
         self.server.should_exit = True
         self.thread.join(timeout=5)
         if self.path.exists():
             shutil.rmtree(self.path)
+
+    # The AnystoreApiTest backend supports presigned URLs (PutFS layout, see
+    # https://putf.sh/reference/presigned-urls/), so override the mixin's
+    # "URL is None" expectation that only holds for non-signing backends.
+    def test_generate_url(self):
+        import base64
+        import hashlib
+        from urllib.parse import quote, urlsplit, parse_qsl
+
+        out = self.archive.archive_file(self.file)
+
+        # No file_name / mime_type → URL has only k/e/t.
+        url = self.archive.generate_url(out, file_name=None)
+        assert url is not None, url
+        parts = urlsplit(url)
+        assert parts.path.startswith("/_/dl/")
+        args = dict(parse_qsl(parts.query))
+        assert set(args) == {"k", "e", "t"}
+        assert args["k"] == "test-presign-key"
+        assert "c" not in args and "d" not in args and "f" not in args
+
+        # With file_name + mime_type → c/d/f populated; token matches the
+        # no-IP nginx hash of $expires$method$arg_c$arg_d$arg_f$uri.
+        url = self.archive.generate_url(
+            out, file_name="report.pdf", mime_type="application/pdf"
+        )
+        parts = urlsplit(url)
+        args = dict(parse_qsl(parts.query))
+        assert args["c"] == "application/pdf"
+        assert args["d"] == "attachment"
+        assert args["f"] == "report.pdf"
+        raw = (
+            f"{args['e']}GET"
+            f"{quote('application/pdf', safe='/=')}"
+            f"{quote('attachment', safe='/=')}"
+            f"{quote('report.pdf', safe='/=')}"
+            f"{parts.path} test-presign-secret"
+        )
+        expected = (
+            base64.urlsafe_b64encode(hashlib.md5(raw.encode()).digest())
+            .decode()
+            .rstrip("=")
+        )
+        assert args["t"] == expected, (args["t"], expected)

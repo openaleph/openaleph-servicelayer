@@ -151,7 +151,13 @@ class AnystoreArchive(VirtualArchive):
     ) -> dict[str, Any]:
         """Map response-header overrides to backend-specific kwargs accepted
         by ``fsspec.AbstractFileSystem.sign``. Backends without an entry just
-        get ``expiration`` — overrides are silently dropped."""
+        get ``expiration`` — overrides are silently dropped.
+
+        For the anystore HTTP backend, build the kwargs in the PutFS shape
+        (``c``/``d``/``f`` query args, with ``d`` as a disposition keyword and
+        ``f`` as a separate filename hint). See
+        https://putf.sh/reference/presigned-urls/ for the full design.
+        """
         protocols = self.store._fs.protocol
         if isinstance(protocols, str):
             protocols = (protocols,)
@@ -161,21 +167,37 @@ class AnystoreArchive(VirtualArchive):
             if mapping is None:
                 continue
             mime_kw, disp_kw = mapping
+            is_anystore = "anystore" in protocol
             if mime_type:
                 kwargs[mime_kw] = mime_type
             if file_name:
-                kwargs[disp_kw] = f"attachment;filename={file_name}"
-            if "anystore" in protocol:
+                if is_anystore:
+                    # PutFS-style: disposition is a keyword, filename is a
+                    # separate `f` arg that nginx splices into the
+                    # Content-Disposition header server-side.
+                    kwargs[disp_kw] = "attachment"
+                    kwargs["filename"] = file_name
+                else:
+                    # s3/gcs/azure backends accept the full Content-Disposition
+                    # value via their own response-header override kwarg.
+                    kwargs[disp_kw] = f"attachment;filename={file_name}"
+            if is_anystore:
                 # add key/secret to kwargs and method
                 kwargs["key"] = settings.ARCHIVE_API_PRESIGN_KEY
                 kwargs["secret"] = settings.ARCHIVE_API_PRESIGN_SECRET
-                # sign method, content disposition and mime — must mirror the
-                # URL-encoding applied in `ApiFileSystem.sign` so the hash
-                # matches `$arg_content_*` on the nginx side (which splits
-                # query args on `&` AND `;`).
-                dispo, mime = kwargs.get(disp_kw, ""), kwargs.get(mime_kw, "")
+                # sign method, content type, disposition and filename — must
+                # mirror the URL-encoding applied in `ApiFileSystem.sign` so
+                # the hash matches `$arg_c$arg_d$arg_f` on the nginx side
+                # (which splits query args on `&` AND `;`). Targets the no-IP
+                # PutFS variant: $secure_link_expires$request_method
+                # $arg_c$arg_d$arg_f$uri.
+                mime = kwargs.get(mime_kw, "")
+                dispo = kwargs.get(disp_kw, "")
+                fname = kwargs.get("filename", "")
                 kwargs["payload"] = (
-                    f"GET{quote(mime, safe='/=')}{quote(dispo, safe='/=')}"
+                    f"GET{quote(mime, safe='/=')}"
+                    f"{quote(dispo, safe='/=')}"
+                    f"{quote(fname, safe='/=')}"
                 )
                 if settings.ARCHIVE_API_PRESIGN_URL:
                     kwargs["base_url"] = settings.ARCHIVE_API_PRESIGN_URL

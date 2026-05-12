@@ -42,9 +42,7 @@ setup(
             "grpcio >= 1.32.0, <2.0.0",
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
-        "anystore": [
-            "anystore @ git+https://github.com/dataresearchcenter/anystore.git",
-        ],
+        "anystore": ["anystore >= 0.1.9"],
         "dev": [
             "twine",
             "moto < 5",

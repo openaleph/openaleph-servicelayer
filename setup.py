@@ -52,6 +52,7 @@ setup(
             "pytest-cov",
             "time-machine>=2.14.1, <3.0.0",
             "uvicorn",
+            "fastapi",
         ],
     },
     test_suite="tests",

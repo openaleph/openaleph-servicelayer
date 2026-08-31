@@ -1,15 +1,26 @@
+import base64
+import hashlib
+import os
 import shutil
 import tempfile
 import threading
+from importlib import reload
 from unittest import TestCase
+from urllib.parse import parse_qsl, quote, urlsplit
 
 import uvicorn
-from anystore.api import create_app
-from anystore.store import get_store
 
 from servicelayer import settings
 from servicelayer.archive import init_archive
 from servicelayer.archive.util import checksum, ensure_path
+
+# The PutFS client reads `PUTFS_HTTPS` once, when `putfs.client.fs` is imported
+# (which fsspec does lazily, the first time a `putfs://` uri is resolved). The
+# test server below speaks plain http, so this has to be in place before any
+# putfs import — hence before the one on the next line.
+os.environ["PUTFS_HTTPS"] = "0"
+
+from putfs import api as putfs_api  # noqa: E402
 
 
 class AnystoreArchiveTestMixin:
@@ -81,19 +92,26 @@ class AnystoreLocalTest(AnystoreArchiveTestMixin, TestCase):
             shutil.rmtree(self.path)
 
 
-class AnystoreApiTest(AnystoreArchiveTestMixin, TestCase):
+class PutFSTest(AnystoreArchiveTestMixin, TestCase):
+    """Run the archive against a real PutFS server (`putfs.api`, Starlette)
+    served by uvicorn on a random port."""
+
     def setUp(self):
-        self.path = ensure_path(tempfile.mkdtemp(prefix="sltest-anystore-api"))
-        store = get_store(str(self.path))
-        app = create_app(store=store)
-        config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
+        self.path = ensure_path(tempfile.mkdtemp(prefix="sltest-putfs"))
+        # `putfs.api` resolves its storage root from `PUTFS_ROOT` at import
+        # time, so point it at this test's temp dir and re-import.
+        os.environ["PUTFS_ROOT"] = str(self.path)
+        reload(putfs_api)
+        config = uvicorn.Config(
+            putfs_api.create_app(), host="127.0.0.1", port=0, log_level="warning"
+        )
         self.server = uvicorn.Server(config)
         self.thread = threading.Thread(target=self.server.run, daemon=True)
         self.thread.start()
         while not self.server.started:
             pass
         host, port = self.server.servers[0].sockets[0].getsockname()
-        uri = f"anystore+http://{host}:{port}"
+        uri = f"putfs://{host}:{port}"
         self._original_api_key = settings.ARCHIVE_API_KEY
         self._original_api_secret = settings.ARCHIVE_API_SECRET
         self._original_presign_key = settings.ARCHIVE_API_PRESIGN_KEY
@@ -110,47 +128,50 @@ class AnystoreApiTest(AnystoreArchiveTestMixin, TestCase):
         settings.ARCHIVE_API_SECRET = self._original_api_secret
         settings.ARCHIVE_API_PRESIGN_KEY = self._original_presign_key
         settings.ARCHIVE_API_PRESIGN_SECRET = self._original_presign_secret
+        os.environ.pop("PUTFS_ROOT", None)
         self.server.should_exit = True
         self.thread.join(timeout=5)
         if self.path.exists():
             shutil.rmtree(self.path)
 
-    # The AnystoreApiTest backend supports presigned URLs (PutFS layout, see
+    # PutFS supports presigned URLs (see
     # https://putf.sh/reference/presigned-urls/), so override the mixin's
     # "URL is None" expectation that only holds for non-signing backends.
     def test_generate_url(self):
-        import base64
-        import hashlib
-        from urllib.parse import quote, urlsplit, parse_qsl
-
         out = self.archive.archive_file(self.file)
 
         # No file_name / mime_type → URL has only k/e/t.
         url = self.archive.generate_url(out, file_name=None)
         assert url is not None, url
         parts = urlsplit(url)
-        assert parts.path.startswith("/_/dl/")
+        assert parts.scheme == "http", parts.scheme
+        assert parts.path.startswith("/_/dl/"), parts.path
         args = dict(parse_qsl(parts.query))
-        assert set(args) == {"k", "e", "t"}
-        assert args["k"] == "test-presign-key"
-        assert "c" not in args and "d" not in args and "f" not in args
+        assert set(args) == {"k", "e", "t"}, args
+        assert args["k"] == "test-presign-key", args
+        assert "c" not in args and "d" not in args and "f" not in args, args
 
         # With file_name + mime_type → c/d/f populated; token matches the
-        # no-IP nginx hash of $expires$method$arg_c$arg_d$arg_f$uri.
+        # nginx hash of $secure_link_expires&$request_method&$arg_c&$arg_d
+        # &$arg_f&$presign_ip&$uri (the shipped `contrib/putfs.nginx.conf`).
         url = self.archive.generate_url(
             out, file_name="report.pdf", mime_type="application/pdf"
         )
         parts = urlsplit(url)
         args = dict(parse_qsl(parts.query))
-        assert args["c"] == "application/pdf"
-        assert args["d"] == "attachment"
-        assert args["f"] == "report.pdf"
-        raw = (
-            f"{args['e']}GET"
-            f"{quote('application/pdf', safe='/=')}"
-            f"{quote('attachment', safe='/=')}"
-            f"{quote('report.pdf', safe='/=')}"
-            f"{parts.path} test-presign-secret"
+        assert args["c"] == "application/pdf", args
+        assert args["d"] == "attachment", args
+        assert args["f"] == "report.pdf", args
+        raw = "&".join(
+            (
+                args["e"],
+                "GET",
+                quote("application/pdf", safe="/=;*'"),
+                quote("attachment", safe="/=;*'"),
+                quote("report.pdf", safe="/=;*'"),
+                "",  # $presign_ip: not bound to a client ip
+                f"{parts.path} test-presign-secret",
+            )
         )
         expected = (
             base64.urlsafe_b64encode(hashlib.md5(raw.encode()).digest())

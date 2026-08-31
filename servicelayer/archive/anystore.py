@@ -1,12 +1,11 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import quote
 
 from anystore import get_store
 from anystore.logic.io import stream
 from anystore.types import Uri
-from anystore.util import ensure_uri as _ensure_uri
+from anystore.util import ensure_uri
 
 from servicelayer import settings
 from servicelayer.archive.virtual import VirtualArchive
@@ -24,7 +23,7 @@ def http_backend_config():
             "Configure `ARCHIVE_API_KEY` / `ARCHIVE_API_SECRET` for archive!"
         )
     return {
-        "User-Agent": "aleph-servicelayer/anystore",
+        "User-Agent": "aleph-servicelayer/putfs",
         "X-Api-Key": settings.ARCHIVE_API_KEY,
         "X-Api-Secret": settings.ARCHIVE_API_SECRET,
     }
@@ -41,16 +40,8 @@ _SIGN_RESPONSE_KWARGS: dict[str, tuple[str, str]] = {
     "abfs": ("content_type", "content_disposition"),
     "abfss": ("content_type", "content_disposition"),
     "az": ("content_type", "content_disposition"),
-    "anystore+http": ("content_type", "content_disposition"),
-    "anystore+https": ("content_type", "content_disposition"),
+    "putfs": ("content_type", "content_disposition"),
 }
-
-
-def ensure_uri(uri: Uri) -> str:
-    uri = _ensure_uri(uri)
-    if uri.startswith("http"):
-        return f"anystore+{uri}"
-    return uri
 
 
 class AnystoreArchive(VirtualArchive):
@@ -66,7 +57,7 @@ class AnystoreArchive(VirtualArchive):
             raise RuntimeError("Configure `ARCHIVE_URI` for anystore archive!")
         super().__init__(base_name)
         uri = ensure_uri(uri)
-        if uri.startswith("anystore"):
+        if uri.startswith("putfs://"):
             self.store = get_store(
                 uri,
                 backend_config={"client_kwargs": {"headers": http_backend_config()}},
@@ -153,7 +144,7 @@ class AnystoreArchive(VirtualArchive):
         by ``fsspec.AbstractFileSystem.sign``. Backends without an entry just
         get ``expiration`` — overrides are silently dropped.
 
-        For the anystore HTTP backend, build the kwargs in the PutFS shape
+        For the PutFS backend, build the kwargs in the PutFS shape
         (``c``/``d``/``f`` query args, with ``d`` as a disposition keyword and
         ``f`` as a separate filename hint). See
         https://putf.sh/reference/presigned-urls/ for the full design.
@@ -167,11 +158,11 @@ class AnystoreArchive(VirtualArchive):
             if mapping is None:
                 continue
             mime_kw, disp_kw = mapping
-            is_anystore = "anystore" in protocol
+            is_putfs = "putfs" in protocol
             if mime_type:
                 kwargs[mime_kw] = mime_type
             if file_name:
-                if is_anystore:
+                if is_putfs:
                     # PutFS-style: disposition is a keyword, filename is a
                     # separate `f` arg that nginx splices into the
                     # Content-Disposition header server-side.
@@ -181,24 +172,19 @@ class AnystoreArchive(VirtualArchive):
                     # s3/gcs/azure backends accept the full Content-Disposition
                     # value via their own response-header override kwarg.
                     kwargs[disp_kw] = f"attachment;filename={file_name}"
-            if is_anystore:
+            if is_putfs:
                 # add key/secret to kwargs and method
                 kwargs["key"] = settings.ARCHIVE_API_PRESIGN_KEY
                 kwargs["secret"] = settings.ARCHIVE_API_PRESIGN_SECRET
-                # sign method, content type, disposition and filename — must
-                # mirror the URL-encoding applied in `ApiFileSystem.sign` so
-                # the hash matches `$arg_c$arg_d$arg_f` on the nginx side
-                # (which splits query args on `&` AND `;`). Targets the no-IP
-                # PutFS variant: $secure_link_expires$request_method
-                # $arg_c$arg_d$arg_f$uri.
-                mime = kwargs.get(mime_kw, "")
-                dispo = kwargs.get(disp_kw, "")
-                fname = kwargs.get("filename", "")
-                kwargs["payload"] = (
-                    f"GET{quote(mime, safe='/=')}"
-                    f"{quote(dispo, safe='/=')}"
-                    f"{quote(fname, safe='/=')}"
-                )
+                # content type, disposition and filename — must
+                # mirror the URL-encoding applied in `PutFSFileSystem.sign` /
+                # it's nginx config. Pass `args` as dict in correct order of
+                # the sign keys.
+                kwargs["args"] = {
+                    "c": kwargs.pop(mime_kw, ""),
+                    "d": kwargs.pop(disp_kw, ""),
+                    "f": kwargs.pop("filename", ""),
+                }
                 if settings.ARCHIVE_API_PRESIGN_URL:
                     kwargs["base_url"] = settings.ARCHIVE_API_PRESIGN_URL
             break

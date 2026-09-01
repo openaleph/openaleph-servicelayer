@@ -169,7 +169,6 @@ class PutFSTest(AnystoreArchiveTestMixin, TestCase):
                 quote("application/pdf", safe="/=;*'"),
                 quote("attachment", safe="/=;*'"),
                 quote("report.pdf", safe="/=;*'"),
-                "",  # $presign_ip: not bound to a client ip
                 f"{parts.path} test-presign-secret",
             )
         )

@@ -1,4 +1,4 @@
-anystore[putfs,http]>=1.3.0
+anystore[putfs,http]>=1.3.1
 banal==1.0.6
 fakeredis==2.22.0
 sqlalchemy==2.0.4

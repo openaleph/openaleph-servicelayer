@@ -42,7 +42,7 @@ setup(
             "grpcio >= 1.32.0, <2.0.0",
             "google-cloud-storage >= 1.31.0, < 3.0.0",
         ],
-        "anystore": ["anystore[putfs,http] >= 1.3.0"],
+        "anystore": ["anystore[putfs,http] >= 1.3.1"],
         "dev": [
             "twine",
             "moto < 5",
